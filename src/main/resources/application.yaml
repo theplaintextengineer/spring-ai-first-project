@@ -1,3 +1,6 @@
 spring:
   application:
     name: spring-ai-first-project
+
+server:
+  port: 9090
