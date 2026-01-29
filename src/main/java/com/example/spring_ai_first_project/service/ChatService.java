@@ -1,0 +1,9 @@
+package com.example.spring_ai_first_project.service;
+
+import reactor.core.publisher.Flux;
+
+public interface ChatService {
+    String talkToLlm(String topic);
+    Flux<String> talkToLlmReactive(String topic);
+    Flux<String> greetReactive();
+}

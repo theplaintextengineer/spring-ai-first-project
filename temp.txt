@@ -1,0 +1,19 @@
+submitEvent -> {
+            String userMsg = submitEvent.getValue();
+
+            if (userMsg.isEmpty())
+                return;
+
+            var expertMsgItem = new MessageListItem(EMPTY_MSG, SUBJECT_EXPERT);
+            messageList.addItem(expertMsgItem);
+
+            chatService.talkToLlmReactive(userMsg)
+                    .subscribe(chunk -> {
+                        getUI().get().access(() -> {
+                            expertMsgItem.appendText(chunk);
+                            scroller.scrollToBottom();
+                        });
+                    }, error -> {
+                        getUI().get().access(() -> Notification.show("Connection lost."));
+                    });
+        }
