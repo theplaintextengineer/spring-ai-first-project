@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 
@@ -30,165 +31,159 @@ import io.micrometer.common.util.StringUtils;
 @SpringComponent
 @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class MainView extends VerticalLayout {
-    private static final String EMPTY_MSG = "";
-    private static final String SUBJECT_EXPERT = "Subject Expert";
-    private static final String YOU = "You";
-    private final ChatService chatService;
-    private final Map<String, List<String>> messages;
-    private final Scroller scroller;
-    private MessageList messageList;
-    private final MainViewState mainViewState;
+  private static final String EMPTY_MSG = "";
+  private static final String SUBJECT_EXPERT = "Subject Expert";
+  private static final String YOU = "You";
+  private final ChatService chatService;
+  private final Map<String, List<String>> messages;
+  private final Scroller scroller;
+  private MessageList messageList;
+  private final MainViewState mainViewState;
 
-    public MainView(MainViewState mainViewState, ChatService chatService, ChatState chatState) {
-        this.mainViewState = mainViewState;
+  public MainView(MainViewState mainViewState, ChatService chatService, ChatState chatState) {
+    this.mainViewState = mainViewState;
 
-        setSizeFull();
-        setPadding(true);
-        setSpacing(false);
+    setSizeFull();
+    setPadding(true);
+    setSpacing(false);
 
-        this.chatService = chatService;
+    this.chatService = chatService;
 
-        this.messages = new HashMap<>();
-        this.messages.put(YOU, new LinkedList<>());
-        this.messages.put(SUBJECT_EXPERT, new LinkedList<>());
+    this.messages = new HashMap<>();
+    this.messages.put(YOU, new LinkedList<>());
+    this.messages.put(SUBJECT_EXPERT, new LinkedList<>());
 
-        this.messageList = new MessageList();
-        this.messageList.setMarkdown(true);
-        this.messageList.setWidthFull();
+    this.messageList = new MessageList();
+    this.messageList.setMarkdown(true);
+    this.messageList.setWidthFull();
 
-        scroller = new Scroller(messageList);
+    scroller = new Scroller(messageList);
 
-        var input = new MessageInput();
-        input.setWidthFull();
-        input.setTooltipText("Enter the topic you want to revise.");
-        input.addThemeVariants(MessageInputVariant.AURA_ICON_BUTTON);
-        input.addSubmitListener(e -> handleUserMessage(chatState.getSubject(), e.getValue()));
+    var input = new MessageInput();
+    input.setWidthFull();
+    input.setTooltipText("Enter the topic you want to revise.");
+    input.addThemeVariants(MessageInputVariant.AURA_ICON_BUTTON);
+    input.addSubmitListener(e -> handleUserMessage(chatState.getSubject(), e.getValue()));
 
-        if (StringUtils.isEmpty(chatState.getSubject())) {
-            input.setEnabled(false);
-        }
+    if (StringUtils.isEmpty(chatState.getSubject())) {
+      input.setEnabled(false);
+    }
 
-        expand(scroller);
+    expand(scroller);
 
-        var progressBar = new ProgressBar();
-        progressBar.setWidthFull();
-        progressBar.getStyle().set("margin-bottom", ".4em");
+    var progressBar = new ProgressBar();
+    progressBar.setWidthFull();
+    progressBar.getStyle().set("margin-bottom", ".4em");
 
-        add(scroller, progressBar, input);
+    add(scroller, progressBar, input);
 
-        chatState.addListener(s -> {
-            input.setEnabled(true);
+    chatState.addListener(s -> {
+      input.setEnabled(true);
 
-            messages.entrySet().forEach(e -> {
-                e.getValue().clear();
-            });
+      messages.entrySet().forEach(e -> {
+        e.getValue().clear();
+      });
 
-            messageList.setItems(new ArrayList<>());
+      messageList.setItems(new ArrayList<>());
 
-            var newMsgItem = createPlaceholderMessage(true);
-            addMessage(newMsgItem);
-            greetResponse(s, newMsgItem);
+      var newMsgItem = createPlaceholderMessage(true);
+      addMessage(newMsgItem);
+      greetResponse(s, newMsgItem);
+    });
+
+    mainViewState.addListener(_ -> {
+      progressBar.setIndeterminate(mainViewState.isStreamingAiResponse());
+    });
+  }
+
+  private void handleUserMessage(String subject, String userMsg) {
+    if (StringUtils.isBlank(userMsg) || StringUtils.isEmpty(subject))
+      return;
+
+    var expertMsg = createPlaceholderMessage(true);
+    addMessage(userMsg, false);
+    addMessage(expertMsg);
+
+    streamResponse(subject, userMsg, expertMsg);
+  }
+
+  private void addMessage(String message, boolean isAssistant) {
+    var username = isAssistant ? SUBJECT_EXPERT : YOU;
+    var item = new MessageListItem(message, Instant.now(), username);
+    messageList.addItem(item);
+  }
+
+  private void addMessage(MessageListItem item) {
+    messageList.addItem(item);
+  }
+
+  private MessageListItem createPlaceholderMessage(boolean isAssistant) {
+    var username = isAssistant ? SUBJECT_EXPERT : YOU;
+    return new MessageListItem(EMPTY_MSG, Instant.now(), username);
+  }
+
+  private void streamResponse(String subject, String userMsg, MessageListItem targetItem) {
+    messages.get(YOU).add(userMsg);
+
+    var fullResponse = new StringBuilder();
+    chatService.talkToLlmReactive(subject, userMsg)
+        .subscribe(chunk -> {
+          getUI().ifPresent(ui -> ui.access(() -> {
+            mainViewState.setStreamingAiResponse(true);
+            fullResponse.append(chunk);
+            targetItem.appendText(chunk);
+            scroller.scrollToBottom();
+          }));
+        }, _ -> {
+        }, onAiResponseComplete(fullResponse));
+  }
+
+  private @Nullable Runnable onAiResponseComplete(StringBuilder fullResponse) {
+    return () -> {
+      getUI().ifPresent(ui -> {
+        ui.access(() -> {
+          messages.get(SUBJECT_EXPERT).add(fullResponse.toString());
+          mainViewState.setStreamingAiResponse(false);
         });
+      });
+    };
+  }
 
-        mainViewState.addListener(_ -> {
-            progressBar.setIndeterminate(mainViewState.isStreamingAiResponse());
-        });
-    }
+  private void greetResponse(MessageListItem targetItem) {
+    var fullResponse = new StringBuilder();
+    chatService.greetReactive()
+        .subscribe(chunk -> {
 
-    private void handleUserMessage(String subject, String userMsg) {
-        if (userMsg.isEmpty())
-            return;
+          getUI().ifPresent(ui -> ui.access(() -> {
+            mainViewState.setStreamingAiResponse(true);
 
-        var expertMsg = createPlaceholderMessage(true);
-        addMessage(userMsg, false);
-        addMessage(expertMsg);
+            fullResponse.append(chunk);
+            targetItem.appendText(chunk);
+          }));
+        }, _ -> {
+        }, onAiResponseComplete(fullResponse));
+  }
 
-        streamResponse(subject, userMsg, expertMsg);
-    }
+  private void greetResponse(String subject, MessageListItem targetItem) {
+    var fullResponse = new StringBuilder();
+    chatService.greetReactive(subject)
+        .subscribe(chunk -> {
+          getUI().ifPresent(ui -> ui.access(() -> {
+            mainViewState.setStreamingAiResponse(true);
+            fullResponse.append(chunk);
+            targetItem.appendText(chunk);
+          }));
+        }, _ -> {
+        }, onAiResponseComplete(fullResponse));
 
-    private void addMessage(String message, boolean isAssistant) {
-        var username = isAssistant ? SUBJECT_EXPERT : YOU;
-        var item = new MessageListItem(message, Instant.now(), username);
-        messageList.addItem(item);
-    }
+  }
 
-    private void addMessage(MessageListItem item) {
-        messageList.addItem(item);
-    }
+  @Override
+  protected void onAttach(AttachEvent attachEvent) {
+    super.onAttach(attachEvent);
 
-    private MessageListItem createPlaceholderMessage(boolean isAssistant) {
-        var username = isAssistant ? SUBJECT_EXPERT : YOU;
-        return new MessageListItem(EMPTY_MSG, Instant.now(), username);
-    }
-
-    private void streamResponse(String subject, String userMsg, MessageListItem targetItem) {
-        messages.get(YOU).add(userMsg);
-
-        var fullResponse = new StringBuilder();
-        chatService.talkToLlmReactive(subject, userMsg)
-                .subscribe(chunk -> {
-                    getUI().ifPresent(ui -> ui.access(() -> {
-                        mainViewState.setStreamingAiResponse(true);
-                        fullResponse.append(chunk);
-                        targetItem.appendText(chunk);
-                        scroller.scrollToBottom();
-                    }));
-                }, _ -> {
-                }, () -> {
-                    getUI().get().access(() -> {
-                        messages.get(SUBJECT_EXPERT).add(fullResponse.toString());
-                        mainViewState.setStreamingAiResponse(false);
-                    });
-                });
-    }
-
-    private void greetResponse(MessageListItem targetItem) {
-        var fullResponse = new StringBuilder();
-        chatService.greetReactive()
-                .subscribe(chunk -> {
-
-                    getUI().ifPresent(ui -> ui.access(() -> {
-                        mainViewState.setStreamingAiResponse(true);
-
-                        fullResponse.append(chunk);
-                        targetItem.appendText(chunk);
-                    }));
-                }, _ -> {
-                }, () -> {
-
-                    getUI().get().access(() -> {
-                        mainViewState.setStreamingAiResponse(false);
-
-                        messages.get(SUBJECT_EXPERT).add(fullResponse.toString());
-                    });
-
-                });
-    }
-
-    private void greetResponse(String subject, MessageListItem targetItem) {
-        var fullResponse = new StringBuilder();
-        chatService.greetReactive(subject)
-                .subscribe(chunk -> {
-                    getUI().ifPresent(ui -> ui.access(() -> {
-                        mainViewState.setStreamingAiResponse(true);
-                        fullResponse.append(chunk);
-                        targetItem.appendText(chunk);
-                    }));
-                }, _ -> {
-                }, () -> {
-                    getUI().get().access(() -> {
-                        mainViewState.setStreamingAiResponse(false);
-                        messages.get(SUBJECT_EXPERT).add(fullResponse.toString());
-                    });
-                });
-    }
-
-    @Override
-    protected void onAttach(AttachEvent attachEvent) {
-        super.onAttach(attachEvent);
-
-        var msgItem = createPlaceholderMessage(true);
-        addMessage(msgItem);
-        greetResponse(msgItem);
-    }
+    var msgItem = createPlaceholderMessage(true);
+    addMessage(msgItem);
+    greetResponse(msgItem);
+  }
 }
