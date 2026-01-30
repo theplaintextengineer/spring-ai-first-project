@@ -2,6 +2,7 @@ package com.example.spring_ai_first_project.views;
 
 import java.util.Map;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -10,16 +11,20 @@ import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 
 import com.example.spring_ai_first_project.service.ChatService;
+import com.example.spring_ai_first_project.state.ChatState;
+import com.example.spring_ai_first_project.state.MainViewState;
 import com.vaadin.flow.component.AttachEvent;
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.messages.MessageInput;
 import com.vaadin.flow.component.messages.MessageInputVariant;
 import com.vaadin.flow.component.messages.MessageList;
 import com.vaadin.flow.component.messages.MessageListItem;
 import com.vaadin.flow.component.orderedlayout.Scroller;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.progressbar.ProgressBar;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.annotation.SpringComponent;
+
+import io.micrometer.common.util.StringUtils;
 
 @Route("")
 @SpringComponent
@@ -32,8 +37,11 @@ public class MainView extends VerticalLayout {
     private final Map<String, List<String>> messages;
     private final Scroller scroller;
     private MessageList messageList;
+    private final MainViewState mainViewState;
 
-    public MainView(ChatService chatService, UI ui) {
+    public MainView(MainViewState mainViewState, ChatService chatService, ChatState chatState) {
+        this.mainViewState = mainViewState;
+
         setSizeFull();
         setPadding(true);
         setSpacing(false);
@@ -52,15 +60,42 @@ public class MainView extends VerticalLayout {
 
         var input = new MessageInput();
         input.setWidthFull();
-        input.setTooltipText("Enter the topic you want to revise from Computer Organization Subject:");
+        input.setTooltipText("Enter the topic you want to revise.");
         input.addThemeVariants(MessageInputVariant.AURA_ICON_BUTTON);
-        input.addSubmitListener(e -> handleUserMessage(e.getValue()));
+        input.addSubmitListener(e -> handleUserMessage(chatState.getSubject(), e.getValue()));
+
+        if (StringUtils.isEmpty(chatState.getSubject())) {
+            input.setEnabled(false);
+        }
 
         expand(scroller);
-        add(scroller, input);
+
+        var progressBar = new ProgressBar();
+        progressBar.setWidthFull();
+        progressBar.getStyle().set("margin-bottom", ".4em");
+
+        add(scroller, progressBar, input);
+
+        chatState.addListener(s -> {
+            input.setEnabled(true);
+
+            messages.entrySet().forEach(e -> {
+                e.getValue().clear();
+            });
+
+            messageList.setItems(new ArrayList<>());
+
+            var newMsgItem = createPlaceholderMessage(true);
+            addMessage(newMsgItem);
+            greetResponse(s, newMsgItem);
+        });
+
+        mainViewState.addListener(_ -> {
+            progressBar.setIndeterminate(mainViewState.isStreamingAiResponse());
+        });
     }
 
-    private void handleUserMessage(String userMsg) {
+    private void handleUserMessage(String subject, String userMsg) {
         if (userMsg.isEmpty())
             return;
 
@@ -68,7 +103,7 @@ public class MainView extends VerticalLayout {
         addMessage(userMsg, false);
         addMessage(expertMsg);
 
-        streamResponse(userMsg, expertMsg);
+        streamResponse(subject, userMsg, expertMsg);
     }
 
     private void addMessage(String message, boolean isAssistant) {
@@ -86,15 +121,24 @@ public class MainView extends VerticalLayout {
         return new MessageListItem(EMPTY_MSG, Instant.now(), username);
     }
 
-    private void streamResponse(String userMsg, MessageListItem targetItem) {
+    private void streamResponse(String subject, String userMsg, MessageListItem targetItem) {
+        messages.get(YOU).add(userMsg);
+
         var fullResponse = new StringBuilder();
-        chatService.talkToLlmReactive(userMsg)
+        chatService.talkToLlmReactive(subject, userMsg)
                 .subscribe(chunk -> {
                     getUI().ifPresent(ui -> ui.access(() -> {
+                        mainViewState.setStreamingAiResponse(true);
                         fullResponse.append(chunk);
                         targetItem.appendText(chunk);
                         scroller.scrollToBottom();
                     }));
+                }, _ -> {
+                }, () -> {
+                    getUI().get().access(() -> {
+                        messages.get(SUBJECT_EXPERT).add(fullResponse.toString());
+                        mainViewState.setStreamingAiResponse(false);
+                    });
                 });
     }
 
@@ -102,10 +146,40 @@ public class MainView extends VerticalLayout {
         var fullResponse = new StringBuilder();
         chatService.greetReactive()
                 .subscribe(chunk -> {
+
                     getUI().ifPresent(ui -> ui.access(() -> {
+                        mainViewState.setStreamingAiResponse(true);
+
                         fullResponse.append(chunk);
                         targetItem.appendText(chunk);
                     }));
+                }, _ -> {
+                }, () -> {
+
+                    getUI().get().access(() -> {
+                        mainViewState.setStreamingAiResponse(false);
+
+                        messages.get(SUBJECT_EXPERT).add(fullResponse.toString());
+                    });
+
+                });
+    }
+
+    private void greetResponse(String subject, MessageListItem targetItem) {
+        var fullResponse = new StringBuilder();
+        chatService.greetReactive(subject)
+                .subscribe(chunk -> {
+                    getUI().ifPresent(ui -> ui.access(() -> {
+                        mainViewState.setStreamingAiResponse(true);
+                        fullResponse.append(chunk);
+                        targetItem.appendText(chunk);
+                    }));
+                }, _ -> {
+                }, () -> {
+                    getUI().get().access(() -> {
+                        mainViewState.setStreamingAiResponse(false);
+                        messages.get(SUBJECT_EXPERT).add(fullResponse.toString());
+                    });
                 });
     }
 

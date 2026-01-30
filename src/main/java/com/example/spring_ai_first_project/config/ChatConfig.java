@@ -11,7 +11,7 @@ public class ChatConfig {
     ChatClient chatClient(ChatClient.Builder builder) {
         var options = ChatOptions.builder()
                 .model("llama3.2:3b")
-                .temperature(0.2)
+                .temperature(0.2) // Less Creative -> More Deterministic
                 .build();
 
         return builder
