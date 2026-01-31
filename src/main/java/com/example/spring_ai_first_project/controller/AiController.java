@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.spring_ai_first_project.service.ChatService;
+import com.example.spring_ai_first_project.service.chat.ChatService;
 
 @RestController
 @RequestMapping(path = "/api/ai")

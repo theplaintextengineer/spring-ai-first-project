@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 
-import com.example.spring_ai_first_project.service.ChatService;
+import com.example.spring_ai_first_project.service.chat.ChatService;
 import com.example.spring_ai_first_project.state.ChatState;
 import com.example.spring_ai_first_project.state.MainViewState;
 import com.vaadin.flow.component.AttachEvent;

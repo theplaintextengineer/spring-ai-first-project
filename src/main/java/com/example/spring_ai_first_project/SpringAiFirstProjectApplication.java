@@ -14,7 +14,7 @@ import com.vaadin.flow.theme.lumo.Lumo;
 @StyleSheet(Aura.STYLESHEET)
 @StyleSheet(Lumo.UTILITY_STYLESHEET)
 @StyleSheet("styles.css")
-@PWA(name = "Subject Expert UI", shortName = "Subject Expert")
+@PWA(name = "The Plaintext Engineer Academy", shortName = "PTE - Academy")
 @Push
 public class SpringAiFirstProjectApplication implements AppShellConfigurator {
 

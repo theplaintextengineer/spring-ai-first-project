@@ -1,11 +1,16 @@
 package com.example.spring_ai_first_project.layout;
 
+import java.util.Objects;
+
 import org.springframework.context.annotation.Scope;
 
 import io.micrometer.common.util.StringUtils;
 
+import com.example.spring_ai_first_project.constant.AppConstant;
 import com.example.spring_ai_first_project.state.ChatState;
+import com.example.spring_ai_first_project.state.MainViewState;
 import com.example.spring_ai_first_project.views.MainView;
+import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
@@ -20,21 +25,26 @@ import com.vaadin.flow.spring.annotation.SpringComponent;
 @Scope("prototype")
 public class AppLayoutMain extends AppLayout {
     private final Span subjectLabel;
+    private final Select<String> dropdown;
+    private final MainViewState mainViewState;
 
-    public AppLayoutMain(MainView mainView, ChatState chatState) {
+    public AppLayoutMain(MainView mainView, final MainViewState mainViewState, ChatState chatState) {
+        this.mainViewState = mainViewState;
+
         HorizontalLayout header = new HorizontalLayout();
         header.setAlignItems(Alignment.CENTER);
         header.setWidthFull();
 
-        H1 projectTitle = new H1("The Plaintext Engineer Academy");
+        H1 projectTitle = new H1(AppConstant.APP_NAME);
         projectTitle.setWidthFull();
 
         subjectLabel = new Span();
         subjectLabel.setWidthFull();
         header.expand(subjectLabel);
 
-        var dropdown = new Select<String>();
-        dropdown.setItems("Computer Organization", "Computer Networks", "Data Structure", "Operating Systems");
+        dropdown = new Select<String>();
+        // dropdown.setItems("Computer Organization", "Computer Networks", "Data
+        // Structure", "Operating Systems");
         dropdown.setEmptySelectionCaption("Select Subject");
 
         dropdown.setEmptySelectionAllowed(true);
@@ -59,5 +69,16 @@ public class AppLayoutMain extends AppLayout {
 
     private void setSubjectLabel(String label) {
         this.subjectLabel.setText(label);
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+
+        Objects.requireNonNull(dropdown)
+                .setItems(mainViewState.getSubjects()
+                        .stream()
+                        .map(s -> s.getName())
+                        .toList());
     }
 }
