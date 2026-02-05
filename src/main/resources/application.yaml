@@ -2,13 +2,21 @@ spring:
   application:
     name: spring-ai-first-project
 
+  ai:
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: always #Always
+
   datasource:
     url: ${DB_URL}/pte_academy
     username: ${DB_USER}
     password: ${DB_PASSWORD}
 
-    configuration:
+    hikari:
       maximum-pool-size: 2
+      minimum-idle: 20
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect

@@ -8,26 +8,32 @@ import org.springframework.context.annotation.Scope;
 
 import com.vaadin.flow.spring.annotation.SpringComponent;
 
+import lombok.Getter;
+import lombok.Setter;
+
 @SpringComponent
 @Scope("session")
 public class ChatState {
+    @Getter
     private String subject;
+
+    @Getter
+    @Setter
+    private Boolean isFirstMessage;
+
     private final List<Consumer<String>> listeners;
 
-    public ChatState(){
+    public ChatState() {
         listeners = new ArrayList<>();
-    }
-
-    public String getSubject() {
-        return subject;
+        isFirstMessage = true;
     }
 
     public void setSubject(String subject) {
         this.subject = subject;
-        this.listeners.forEach(c->c.accept(subject));
+        this.listeners.forEach(c -> c.accept(subject));
     }
 
-    public void addListener(Consumer<String> consumer){
+    public void addListener(Consumer<String> consumer) {
         this.listeners.add(consumer);
     }
 }

@@ -1,11 +1,11 @@
 package com.example.spring_ai_first_project.views;
 
-import java.util.Map;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
@@ -31,6 +31,8 @@ import io.micrometer.common.util.StringUtils;
 @SpringComponent
 @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class MainView extends VerticalLayout {
+
+  private final ChatState chatState;
   private static final String EMPTY_MSG = "";
   private static final String SUBJECT_EXPERT = "Subject Expert";
   private static final String YOU = "You";
@@ -63,7 +65,8 @@ public class MainView extends VerticalLayout {
     input.setWidthFull();
     input.setTooltipText("Enter the topic you want to revise.");
     input.addThemeVariants(MessageInputVariant.AURA_ICON_BUTTON);
-    input.addSubmitListener(e -> handleUserMessage(chatState.getSubject(), e.getValue()));
+    input
+        .addSubmitListener(e -> handleUserMessage(chatState.getSubject(), e.getValue(), chatState.getIsFirstMessage()));
 
     if (StringUtils.isEmpty(chatState.getSubject())) {
       input.setEnabled(false);
@@ -94,8 +97,25 @@ public class MainView extends VerticalLayout {
     mainViewState.addListener(_ -> {
       progressBar.setIndeterminate(mainViewState.isStreamingAiResponse());
     });
+
+    this.chatState = chatState;
   }
 
+  private void handleUserMessage(String subject, String userMsg, Boolean isFirstMessage) {
+    if (StringUtils.isBlank(userMsg) || StringUtils.isEmpty(subject))
+      return;
+
+    var expertMsg = createPlaceholderMessage(true);
+    addMessage(userMsg, false);
+    addMessage(expertMsg);
+
+    streamResponse(subject, userMsg, expertMsg, isFirstMessage);
+
+    if (isFirstMessage)
+      chatState.setIsFirstMessage(false);
+  }
+
+  @Deprecated(forRemoval = true)
   private void handleUserMessage(String subject, String userMsg) {
     if (StringUtils.isBlank(userMsg) || StringUtils.isEmpty(subject))
       return;
@@ -122,6 +142,23 @@ public class MainView extends VerticalLayout {
     return new MessageListItem(EMPTY_MSG, Instant.now(), username);
   }
 
+  private void streamResponse(String subject, String userMsg, MessageListItem targetItem, Boolean isFirstMessage) {
+    messages.get(YOU).add(userMsg);
+
+    var fullResponse = new StringBuilder();
+    chatService.talkToLlmReactive(subject, userMsg, isFirstMessage)
+        .subscribe(chunk -> {
+          getUI().ifPresent(ui -> ui.access(() -> {
+            mainViewState.setStreamingAiResponse(true);
+            fullResponse.append(chunk);
+            targetItem.appendText(chunk);
+            scroller.scrollToBottom();
+          }));
+        }, _ -> {
+        }, onAiResponseComplete(fullResponse));
+  }
+
+  @Deprecated(forRemoval = true)
   private void streamResponse(String subject, String userMsg, MessageListItem targetItem) {
     messages.get(YOU).add(userMsg);
 

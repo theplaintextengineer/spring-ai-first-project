@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.stereotype.Service;
@@ -20,122 +21,142 @@ import reactor.core.publisher.Flux;
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
-    private final ChatClient chatClient;
-    private final SubjectService subjectService;
+        private final ChatClient chatClient;
+        private final SubjectService subjectService;
+        private final Advisor chatAdvisor;
 
-    @Override
-    public String talkToLlm(String topic) {
-        log.info("Starting to talk on Topic: {}", topic);
+        @Override
+        public String talkToLlm(String topic) {
+                log.info("Starting to talk on Topic: {}", topic);
 
-        return chatClient
-                .prompt("You are a Computer Organization subject expert. Summarize the topic in 5 bullet points on "
-                        + topic)
-                .call()
-                .content();
-    }
+                return chatClient
+                                .prompt("You are a Computer Organization subject expert. Summarize the topic in 5 bullet points on "
+                                                + topic)
+                                .call()
+                                .content();
+        }
 
-    @Override
-    public Flux<String> talkToLlmReactive(String topic) {
-        log.info("Starting to talk on Topic: {}", topic);
+        @Override
+        public Flux<String> talkToLlmReactive(String topic) {
+                log.info("Starting to talk on Topic: {}", topic);
 
-        var params = new HashMap<String, Object>();
-        params.put("topic", topic);
+                // var params = new HashMap<String, Object>();
+                // params.put("topic", topic);
 
-        var template = "You are a Computer Organization subject expert. Summarize the topic in 5 bullet points on {topic}";
+                // var template = "You are a Computer Organization subject expert. Summarize the
+                // topic in 5 bullet points on {topic}";
 
-        var promptTemplate = PromptTemplate.builder()
-                .template(template)
-                .variables(params)
-                .build();
+                // var promptTemplate = PromptTemplate.builder()
+                // .template(template)
+                // .variables(params)
+                // .build();
 
-        var prompt = Prompt.builder()
-                .content(promptTemplate.render())
-                .build();
+                // var prompt = Prompt.builder()
+                // .content(promptTemplate.render())
+                // .build();
 
-        return chatClient
-                .prompt(prompt)
-                .stream()
-                .content();
-    }
+                return chatClient
+                                .prompt(topic)
+                                .advisors(chatAdvisor)
+                                .stream()
+                                .content();
+        }
 
-    @Override
-    public Flux<String> greetReactive() {
-        log.info("Starting to Greet messages.");
+        @Override
+        public Flux<String> greetReactive() {
+                log.info("Starting to Greet messages.");
 
-        var template = "You are a {subjects} subject expert. You can ONLY summarize any topic on these subject into 5 bullets points. This makes revision easy for any student. Introduce yourself as helpful assistant as 'Subject Expert' to user in less than 10-15 words. Don't use any person or place name. Ask user to select any of these subject to get started at top right of the screen dropdown.";
+                var template = "You are a {subjects} subject expert. You can ONLY summarize any topic on these subject into 5 bullets points. This makes revision easy for any student. Introduce yourself as helpful assistant as 'Subject Expert' to user in less than 10-15 words. Don't use any person or place name. Ask user to select any of these subject to get started at top right of the screen dropdown.";
 
-        var variables = new HashMap<String, Object>();
+                var variables = new HashMap<String, Object>();
 
-        var subjectsName = subjectService.getAllSubjects()
-                .stream()
-                .map(Subject::getName)
-                .collect(Collectors.joining(","));
+                var subjectsName = subjectService.getAllSubjects()
+                                .stream()
+                                .map(Subject::getName)
+                                .collect(Collectors.joining(","));
 
-        variables.put("subjects", subjectsName);
+                variables.put("subjects", subjectsName);
 
-        var promptTemplate = PromptTemplate.builder()
-                .template(template)
-                .variables(variables)
-                .build();
+                var promptTemplate = PromptTemplate.builder()
+                                .template(template)
+                                .variables(variables)
+                                .build();
 
-        var prompt = Prompt.builder()
-                .content(promptTemplate.render())
-                .build();
+                var prompt = Prompt.builder()
+                                .content(promptTemplate.render())
+                                .build();
 
-        return chatClient
-                .prompt(prompt)
-                .stream()
-                .content();
-    }
+                return chatClient
+                                .prompt(prompt)
+                                .stream()
+                                .content();
+        }
 
-    @Override
-    public Flux<String> talkToLlmReactive(String subject, String topic) {
-        log.info("Starting to talk on Subject: {}, Topic: {}", subject, topic);
+        @Override
+        public Flux<String> talkToLlmReactive(String subject, String topic) {
+                log.info("Starting to talk on Subject: {}, Topic: {}", subject, topic);
 
-        var params = new HashMap<String, Object>();
-        params.put("subject", subject);
-        params.put("topic", topic);
+                var params = new HashMap<String, Object>();
+                params.put("subject", subject);
+                params.put("topic", topic);
 
-        var template = "You are a {subject} subject expert. Summarize the topic in 5 bullet points on {topic}. Don't answer topic if it is not related to subject. Simply, say sorry to user.";
+                var template = """
+                                You are an expert in {subject}.
+                                Your task is to summarize the topic "{topic}" in exactly 5 concise bullet points.
 
-        var promptTemplate = PromptTemplate.builder()
-                .template(
-                        template)
-                .variables(params)
-                .build();
+                                Guidelines:
+                                - Each bullet point should be clear, factual, and easy to understand.
+                                - Do not provide information if the topic is unrelated to {subject}.
+                                - If unrelated, respond only with: "Sorry, the topic is not related to {subject}."
+                                - Avoid long paragraphs; keep each bullet point under 20 words.
+                                """;
 
-        var prompt = Prompt.builder()
-                .content(promptTemplate.render())
-                .build();
+                var promptTemplate = PromptTemplate.builder()
+                                .template(template)
+                                .variables(params)
+                                .build();
 
-        return chatClient
-                .prompt(prompt)
-                .stream()
-                .content();
-    }
+                var prompt = Prompt.builder()
+                                .content(promptTemplate.render())
+                                .build();
 
-    @Override
-    public Flux<String> greetReactive(String subject) {
-        log.info("Starting to talk on Subject: {}", subject);
+                return chatClient
+                                .prompt(prompt)
+                                .advisors(chatAdvisor)
+                                .stream()
+                                .content();
+        }
 
-        var template = "You are a {subject} expert. You can ONLY summaeize any topic on {subject} into 5 bullets points. This makes revision easy for any student. Introduce yourself as helpful assistant cum 'Subject Expert' to user in less than 10-15 words. Don't use any person or place name.";
+        @Override
+        public Flux<String> greetReactive(String subject) {
+                log.info("Starting to talk on Subject: {}", subject);
 
-        var params = new HashMap<String, Object>();
-        params.put("subject", subject);
+                var template = "You are a {subject} expert. You can ONLY summaeize any topic on {subject} into 5 bullets points. This makes revision easy for any student. Introduce yourself as helpful assistant cum 'Subject Expert' to user in less than 10-15 words. Don't use any person or place name.";
 
-        var promptTemplate = PromptTemplate.builder()
-                .template(template)
-                .variables(params)
-                .build();
+                var params = new HashMap<String, Object>();
+                params.put("subject", subject);
 
-        var prompt = Prompt.builder()
-                .content(promptTemplate.render())
-                .build();
+                var promptTemplate = PromptTemplate.builder()
+                                .template(template)
+                                .variables(params)
+                                .build();
 
-        return chatClient
-                .prompt(prompt)
-                .stream()
-                .content();
-    }
+                var prompt = Prompt.builder()
+                                .content(promptTemplate.render())
+                                .build();
+
+                return chatClient
+                                .prompt(prompt)
+                                .stream()
+                                .content();
+        }
+
+        @Override
+        public Flux<String> talkToLlmReactive(String subject, String topic, Boolean isFirstMessage) {
+                if (isFirstMessage)
+                        return talkToLlmReactive(subject, topic);
+
+                return talkToLlmReactive(topic);
+        }
 
 }

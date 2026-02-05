@@ -9,6 +9,8 @@ public interface ChatService {
 
     Flux<String> talkToLlmReactive(String subject, String topic);
 
+    Flux<String> talkToLlmReactive(String subject, String topic, Boolean isFirstMessage);
+
     Flux<String> greetReactive();
 
     Flux<String> greetReactive(String subject);
