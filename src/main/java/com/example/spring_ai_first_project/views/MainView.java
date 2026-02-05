@@ -115,18 +115,6 @@ public class MainView extends VerticalLayout {
       chatState.setIsFirstMessage(false);
   }
 
-  @Deprecated(forRemoval = true)
-  private void handleUserMessage(String subject, String userMsg) {
-    if (StringUtils.isBlank(userMsg) || StringUtils.isEmpty(subject))
-      return;
-
-    var expertMsg = createPlaceholderMessage(true);
-    addMessage(userMsg, false);
-    addMessage(expertMsg);
-
-    streamResponse(subject, userMsg, expertMsg);
-  }
-
   private void addMessage(String message, boolean isAssistant) {
     var username = isAssistant ? SUBJECT_EXPERT : YOU;
     var item = new MessageListItem(message, Instant.now(), username);
@@ -147,23 +135,6 @@ public class MainView extends VerticalLayout {
 
     var fullResponse = new StringBuilder();
     chatService.talkToLlmReactive(subject, userMsg, isFirstMessage)
-        .subscribe(chunk -> {
-          getUI().ifPresent(ui -> ui.access(() -> {
-            mainViewState.setStreamingAiResponse(true);
-            fullResponse.append(chunk);
-            targetItem.appendText(chunk);
-            scroller.scrollToBottom();
-          }));
-        }, _ -> {
-        }, onAiResponseComplete(fullResponse));
-  }
-
-  @Deprecated(forRemoval = true)
-  private void streamResponse(String subject, String userMsg, MessageListItem targetItem) {
-    messages.get(YOU).add(userMsg);
-
-    var fullResponse = new StringBuilder();
-    chatService.talkToLlmReactive(subject, userMsg)
         .subscribe(chunk -> {
           getUI().ifPresent(ui -> ui.access(() -> {
             mainViewState.setStreamingAiResponse(true);
